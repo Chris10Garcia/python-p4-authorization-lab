@@ -18,13 +18,17 @@ db.init_app(app)
 
 api = Api(app)
 
+
+
 class ClearSession(Resource):
 
-    def delete(self):
-    
+    def get(self):
+        # if not session['page_views']:
+        #     session['page_views'] = None
+        # if not session['user_id']:
+        #     session['user_id'] = None
         session['page_views'] = None
         session['user_id'] = None
-
         return {}, 204
 
 class IndexArticle(Resource):
@@ -47,7 +51,7 @@ class ShowArticle(Resource):
             if session['page_views'] <= 3:
                 return article_json, 200
 
-            return {'message': 'Maximum pageview limit reached'}, 401
+            return {'error': 'Maximum pageview limit reached'}, 401
 
         return article_json, 200
 
@@ -59,7 +63,6 @@ class Login(Resource):
         user = User.query.filter(User.username == username).first()
 
         if user:
-        
             session['user_id'] = user.id
             return user.to_dict(), 200
 
@@ -76,23 +79,41 @@ class Logout(Resource):
 class CheckSession(Resource):
 
     def get(self):
-        
         user_id = session['user_id']
+        print(user_id)
         if user_id:
             user = User.query.filter(User.id == user_id).first()
             return user.to_dict(), 200
         
         return {}, 401
 
+# @app.before_request
+# def check_if_logged_in():
+#     if hasattr(session, 'user_id'):
+#         print(session['user_id'])
+#     if (not hasattr(session, 'user_id')) and (request.endpoint == 'member_index' or request.endpoint == 'member_article'):    
+#         return {'error': 'Unauthorized'}, 401
+
 class MemberOnlyIndex(Resource):
     
     def get(self):
-        pass
+        if not session['user_id'] and request.endpoint == 'member_index':   
+        # if not hasattr(session, 'user_id') and request.endpoint == 'member_index':    
+            return {'error': 'Unauthorized'}, 401
+        
+        articles_to_dict = [article.to_dict() for article in Article.query.filter(Article.is_member_only == True).all()]
+
+        return make_response(jsonify(articles_to_dict), 200)
 
 class MemberOnlyArticle(Resource):
     
     def get(self, id):
-        pass
+        if not session['user_id'] and request.endpoint == 'member_article':    
+            return {'error': 'Unauthorized'}, 401
+
+        articles_to_dict = Article.query.filter(Article.is_member_only == True and Article.id == id).first().to_dict()
+        
+        return make_response(jsonify(articles_to_dict), 200)
 
 api.add_resource(ClearSession, '/clear', endpoint='clear')
 api.add_resource(IndexArticle, '/articles', endpoint='article_list')
